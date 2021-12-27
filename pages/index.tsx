@@ -1,15 +1,12 @@
-import { Box, Center, Heading, Input, VStack } from "@chakra-ui/react";
+import { Box, Button, Center, Heading, Input, VStack } from "@chakra-ui/react";
 import type { NextPage } from "next";
-import Head from "next/head";
-import Image from "next/image";
-import { BingoBuilder } from "../src/components/BingoBuilder";
-import styles from "../styles/Home.module.css";
+import { NewBoardButton } from "../src/components/NewBoardButton";
 
 const Home: NextPage = () => {
   return (
-    <Box>
-      <Center>
-        <Box h="10em" />
+    <Center>
+      <Box w={{ base: "90%", md: "500px", sm: "400px" }}>
+        <Box h="50px" />
         <VStack>
           <Heading as="h1">
             Build you own bingo game and share it with your friends!
@@ -19,10 +16,9 @@ const Home: NextPage = () => {
             board.
           </Heading>
         </VStack>
-      </Center>
-
-      <BingoBuilder />
-    </Box>
+        <NewBoardButton />
+      </Box>
+    </Center>
   );
 };
 

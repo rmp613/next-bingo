@@ -3,8 +3,8 @@ import { chakra } from "@chakra-ui/react";
 import React, { useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { AnyObject } from "../models/AnyObject";
 
-export type AnyObject = Record<string, any>;
 type Props<FormValues extends AnyObject> = {
   defaultValues: FormValues;
   onSubmit: (values: FormValues) => any;

@@ -2,6 +2,7 @@ import {
   Box,
   Button,
   Center,
+  chakra,
   Divider,
   Flex,
   FormControl,
@@ -25,18 +26,27 @@ import {
 import { string, z } from "zod";
 import { useFormComponent } from "./Form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import React, { KeyboardEventHandler, MouseEventHandler } from "react";
-import { CloseIcon, DeleteIcon } from "@chakra-ui/icons";
+import React, {
+  KeyboardEventHandler,
+  MouseEventHandler,
+  useContext,
+} from "react";
+import { AddIcon, CloseIcon, DeleteIcon } from "@chakra-ui/icons";
+import { Board, BoardSchema, getDefaultBoard } from "../models/Board";
+import { updateBoard } from "../commands/board.commands";
+import { pipe } from "fp-ts/lib/function";
+import { DependencyProviderContext } from "./DependencyProvider";
+import { useRandomId } from "../utils/generate-id";
+import * as TE from "fp-ts/lib/TaskEither";
+import * as O from "fp-ts/lib/Option";
+import { isZodError } from "../utils/fp-zod";
+import { withAuthUser } from "./withAuthUser";
+import { omit } from "lodash";
+import { atom } from "jotai";
+import { withBoard } from "./withBoard";
 
-const TileSchema = z.object({
-  title: z.string().min(1),
-  description: z.string(),
-});
-const Schema = z.object({
-  name: z.string().min(1),
-  tiles: z.array(TileSchema),
-});
-
+// tODO: collection group query board id
+const Schema = BoardSchema.omit({ id: true });
 type FormValues = z.infer<typeof Schema>;
 
 const BingoInput: React.FC<{
@@ -46,10 +56,8 @@ const BingoInput: React.FC<{
   register: UseFormRegister<FormValues>;
   append: () => void;
   remove: (index: number) => void;
-  setFocus: UseFormSetFocus<FormValues>;
-}> = ({ name, append, remove, control, index, register, setFocus }) => {
-  const inputValueName = `tiles.${index}.title` as const
-  const prevInputValueName = index > 0 ? `tiles.${index - 1}.title` as const : null;
+}> = ({ name, append, remove, control, index, register }) => {
+  const inputValueName = `tiles.${index}.title` as const;
 
   const value = useWatch({
     name: inputValueName,
@@ -65,25 +73,29 @@ const BingoInput: React.FC<{
           append();
         } else if (e.key === "Backspace" && !value) {
           remove(index);
-          if (prevInputValueName) setFocus(prevInputValueName);
-          //   removeEventListener()
         }
       }}
     />
   );
 };
 
-export const BingoBuilder: React.FC = () => {
+const BoardBuilderForm: React.FC<{
+  cachedBoard: Board;
+  saveBoard: (board: Board) => ReturnType<ReturnType<typeof updateBoard>>;
+}> = ({ saveBoard, cachedBoard }) => {
   const {
     control,
     register,
-    setValue,
-    formState: { errors },
+    setError,
+    formState: { errors, isSubmitting },
     setFocus,
+    handleSubmit,
   } = useForm({
     resolver: zodResolver(Schema),
-    defaultValues: { tiles: [{ title: "", description: "" }], name: "" },
+    defaultValues: omit(getDefaultBoard(""), "id"),
   });
+  const getTitleFieldName = (index: number): `tiles.${number}.title` =>
+    `tiles.${index}.title`;
   const { fields, append, prepend, remove, swap, move, insert } = useFieldArray(
     {
       control, // control props comes from useForm (optional: if you are using FormContext)
@@ -95,14 +107,53 @@ export const BingoBuilder: React.FC = () => {
   const handleAppend = () => {
     append({ title: "", description: "" });
   };
+  const handleRemove = (arrLength: number) => (index: number) => {
+    if (arrLength < 2) {
+      return;
+    }
+    remove(index);
+    Promise.resolve().then(() => {
+      setFocus(
+        index > 0 ? getTitleFieldName(index - 1) : getTitleFieldName(index)
+      );
+    });
+  };
 
   const appendOnClick: MouseEventHandler<HTMLButtonElement> = (e) => {
     e.preventDefault();
     handleAppend();
   };
+
+  const removeOnClick =
+    (index: number): MouseEventHandler<HTMLButtonElement> =>
+    (e) => {
+      e.preventDefault();
+      handleRemove(fields.length)(index);
+    };
+
+  const onSubmit = async (values: FormValues) => {
+    const error = await pipe(
+      { ...values, id: cachedBoard.id },
+      saveBoard,
+      TE.match(
+        (l) => l,
+        () => null
+      )
+    )();
+    if (error) {
+      if (isZodError<FormValues>(error)) {
+        error.issues.forEach((issue) => {
+          setError(issue.path as any, { message: issue.message });
+        });
+      } else {
+        console.error("Unexpected error:", error);
+        setError("name", { message: "An unexpected error occurred" });
+      }
+    }
+  };
   return (
-    <Center>
-      <VStack spacing="1rem" w="500px">
+    <chakra.form onSubmit={handleSubmit(onSubmit)}>
+      <VStack spacing="1rem">
         <FormControl isInvalid={!!errors.name}>
           <FormLabel htmlFor="name">Name your bingo game</FormLabel>
           <Input {...register("name")} placeholder="E.g. Family bingo game" />
@@ -114,7 +165,7 @@ export const BingoBuilder: React.FC = () => {
           <VStack spacing="1rem">
             {fields.map((field, index) => {
               const name = `tiles.${index}.title` as const;
-              console.log(field);
+              const isLast = index === fields.length - 1;
               return (
                 <>
                   <FormControl
@@ -126,16 +177,23 @@ export const BingoBuilder: React.FC = () => {
                         register={register}
                         control={control}
                         index={index}
-                        name={`tiles.${index}.title` as const}
+                        name={name}
                         append={handleAppend}
-                        remove={remove}
-                        setFocus={setFocus}
+                        remove={handleRemove(fields.length)}
                       />
-                      <IconButton
-                        aria-label="Remove Tile"
-                        icon={<DeleteIcon />}
-                        onClick={() => remove(index)}
-                      />
+                      {isLast ? (
+                        <IconButton
+                          aria-label="Add Tile"
+                          icon={<AddIcon />}
+                          onClick={appendOnClick}
+                        />
+                      ) : (
+                        <IconButton
+                          aria-label="Remove Tile"
+                          icon={<DeleteIcon />}
+                          onClick={removeOnClick(index)}
+                        />
+                      )}
                     </HStack>
                     <FormErrorMessage>
                       {errors.tiles?.[index]?.title?.message}
@@ -146,19 +204,17 @@ export const BingoBuilder: React.FC = () => {
             })}
           </VStack>
         </FormControl>
-        <Flex
-          dir="row"
-          align="center"
-          justifyContent={"stretch"}
-          borderWidth={1}
-        >
-          <Box>
-            <Text>Total: {fields.length}</Text>
-          </Box>
-          <Spacer />
-          <Button onClick={appendOnClick}>+</Button>
-        </Flex>
+        <Text>Total: {fields.length}</Text>
+        <Button type="submit" isLoading={isSubmitting}>
+          Continue
+        </Button>
       </VStack>
-    </Center>
+    </chakra.form>
   );
 };
+
+export const BingoBuilder: React.FC<{ boardId: string }> = ({ boardId }) => 
+   pipe(
+    withBoard(boardId, BoardBuilderForm),
+    withAuthUser<{ boardId: string }>()
+  )({ boardId });
