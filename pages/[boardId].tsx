@@ -2,19 +2,21 @@ import { Box, Center, Heading, Input, VStack } from "@chakra-ui/react";
 import { isString } from "fp-ts/lib/string";
 import type { NextPage } from "next";
 import { useRouter } from "next/router";
-import { BingoBuilder } from "../src/components/BingoBuilder";
+import { BoardView } from "../src/components/BoardView";
 
 const Board: NextPage = () => {
   const router = useRouter();
   const { boardId } = router.query;
 
-  if(!isString(boardId)){
+  if (!isString(boardId)) {
     return null;
   }
   return (
     <Box>
       <Center>
-        <Heading>{boardId}</Heading>
+        <VStack>
+          <BoardView boardId={boardId} />
+        </VStack>
       </Center>
     </Box>
   );

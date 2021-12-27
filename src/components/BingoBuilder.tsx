@@ -44,8 +44,8 @@ import { withAuthUser } from "./withAuthUser";
 import { omit } from "lodash";
 import { atom } from "jotai";
 import { withBoard } from "./withBoard";
+import { useRouter } from "next/router";
 
-// tODO: collection group query board id
 const Schema = BoardSchema.omit({ id: true });
 type FormValues = z.infer<typeof Schema>;
 
@@ -83,16 +83,18 @@ const BoardBuilderForm: React.FC<{
   cachedBoard: Board;
   saveBoard: (board: Board) => ReturnType<ReturnType<typeof updateBoard>>;
 }> = ({ saveBoard, cachedBoard }) => {
+  const router = useRouter();
   const {
     control,
     register,
     setError,
+    getValues,
     formState: { errors, isSubmitting },
     setFocus,
     handleSubmit,
   } = useForm({
     resolver: zodResolver(Schema),
-    defaultValues: omit(getDefaultBoard(""), "id"),
+    defaultValues: omit(cachedBoard, "id"),
   });
   const getTitleFieldName = (index: number): `tiles.${number}.title` =>
     `tiles.${index}.title`;
@@ -151,9 +153,23 @@ const BoardBuilderForm: React.FC<{
       }
     }
   };
+  const devAdd25 = async (e) => {
+    e.preventDefault();
+    await onSubmit({
+      ...getValues(),
+      tiles: Array.from(Array(10).keys()).map((num) => ({
+        title: `${num}`,
+        description: "",
+      })),
+    });
+  };
+  const preview = (e) => {
+    e.preventDefault();
+    router.push(`/${cachedBoard.id}`);
+  };
   return (
     <chakra.form onSubmit={handleSubmit(onSubmit)}>
-      <VStack spacing="1rem">
+      <VStack spacing="1rem" w={500}>
         <FormControl isInvalid={!!errors.name}>
           <FormLabel htmlFor="name">Name your bingo game</FormLabel>
           <Input {...register("name")} placeholder="E.g. Family bingo game" />
@@ -161,7 +177,11 @@ const BoardBuilderForm: React.FC<{
         </FormControl>
         <Divider />
         <FormControl isInvalid={!!errors.tiles?.length}>
-          <FormLabel htmlFor="tiles">Add your bingo tiles:</FormLabel>
+          <HStack justifyContent={"space-between"}>
+            <FormLabel htmlFor="tiles">Add your bingo tiles:</FormLabel>
+            <Button onClick={preview}>Preview</Button>
+          </HStack>
+          <Spacer h={1} />
           <VStack spacing="1rem">
             {fields.map((field, index) => {
               const name = `tiles.${index}.title` as const;
@@ -208,13 +228,10 @@ const BoardBuilderForm: React.FC<{
         <Button type="submit" isLoading={isSubmitting}>
           Continue
         </Button>
+        <Button onClick={devAdd25}>Dev add 25</Button>
       </VStack>
     </chakra.form>
   );
 };
 
-export const BingoBuilder: React.FC<{ boardId: string }> = ({ boardId }) => 
-   pipe(
-    withBoard(boardId, BoardBuilderForm),
-    withAuthUser<{ boardId: string }>()
-  )({ boardId });
+export const BingoBuilder = withBoard()(BoardBuilderForm);
