@@ -153,7 +153,7 @@ const BoardBuilderForm: React.FC<{
       }
     }
   };
-  const devAdd25 = async (e) => {
+  const devAdd25: MouseEventHandler = async (e) => {
     e.preventDefault();
     await onSubmit({
       ...getValues(),
@@ -163,7 +163,7 @@ const BoardBuilderForm: React.FC<{
       })),
     });
   };
-  const preview = (e) => {
+  const preview: MouseEventHandler = (e) => {
     e.preventDefault();
     router.push(`/${cachedBoard.id}`);
   };
