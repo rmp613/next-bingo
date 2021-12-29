@@ -14,17 +14,15 @@ import { zodParse } from "../utils/fp-zod";
 import * as E from "fp-ts/lib/Either";
 import * as TE from "fp-ts/lib/TaskEither";
 import { Auth, User } from "firebase/auth";
-
-const USERS_COLLECTION = "users";
-export const BOARDS_COLLECTION = "boards";
+import { FIRESTORE_STRUCTURE } from "../config/firestore";
 
 const isFirestoreError = (err: unknown): err is FirestoreError =>
   (err as any)?.code && (err as any)?.name && (err as any)?.stack;
 const getBoardDoc = (firestore: Firestore, uid: string, boardId: string) =>
   doc(
     collection(
-      doc(collection(firestore, USERS_COLLECTION), uid),
-      BOARDS_COLLECTION
+      doc(collection(firestore, FIRESTORE_STRUCTURE.users.name), uid),
+      FIRESTORE_STRUCTURE.users.boards.name
     ),
     boardId
   );
